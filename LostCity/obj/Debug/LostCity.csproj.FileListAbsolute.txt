@@ -1,0 +1,13 @@
+C:\Users\r.hudson\Documents\WORK\projects\LostCity\LostCity\LostCity\bin\Debug\LostCity.exe.config
+C:\Users\r.hudson\Documents\WORK\projects\LostCity\LostCity\LostCity\bin\Debug\LostCity.exe
+C:\Users\r.hudson\Documents\WORK\projects\LostCity\LostCity\LostCity\bin\Debug\LostCity.pdb
+C:\Users\r.hudson\Documents\WORK\projects\LostCity\LostCity\LostCity\obj\Debug\LostCity.csprojResolveAssemblyReference.cache
+C:\Users\r.hudson\Documents\WORK\projects\LostCity\LostCity\LostCity\obj\Debug\LostCity.Form1.resources
+C:\Users\r.hudson\Documents\WORK\projects\LostCity\LostCity\LostCity\obj\Debug\LostCity.Properties.Resources.resources
+C:\Users\r.hudson\Documents\WORK\projects\LostCity\LostCity\LostCity\obj\Debug\LostCity.csproj.GenerateResource.Cache
+C:\Users\r.hudson\Documents\WORK\projects\LostCity\LostCity\LostCity\obj\Debug\LostCity.exe
+C:\Users\r.hudson\Documents\WORK\projects\LostCity\LostCity\LostCity\obj\Debug\LostCity.pdb
+C:\Users\r.hudson\Documents\WORK\projects\LostCity\LostCity\LostCity\bin\Debug\Win32\librhino3dmio_native.dll
+C:\Users\r.hudson\Documents\WORK\projects\LostCity\LostCity\LostCity\bin\Debug\Win64\librhino3dmio_native.dll
+C:\Users\r.hudson\Documents\WORK\projects\LostCity\LostCity\LostCity\bin\Debug\librhino3dmio_native.dylib
+C:\Users\r.hudson\Documents\WORK\projects\LostCity\LostCity\LostCity\bin\Debug\Rhino3dmIO.dll
