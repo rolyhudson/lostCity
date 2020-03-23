@@ -10,23 +10,100 @@ namespace LostCity
 {
     class RefPlaneVis
     {
+        //https://www.asprs.org/wp-content/uploads/pers/2000journal/january/2000_jan_87-90.pdf
+        public string name;
+        public int groupNum;
         List<List<double>> hts;
         List<List<Point3d>> auxHts=new List<List<Point3d>>();
-        List<List<int>> visScore = new List<List<int>>();
+        public List<List<int>> visScore = new List<List<int>>();
+        public List<List<bool>> observationPts = new List<List<bool>>();
+        List<List<bool>> wanted = new List<List<bool>>();
+        DEM dem;
         double cell;
-        public RefPlaneVis(List<List<double>> eledata, double cellSize)
+        Graph visGraph;
+        public RefPlaneVis(DEM eledata, double cellSize, string groupname, int groupNumber)
         {
-            hts = eledata;
-            
+            dem = eledata;
+            hts = eledata.hts;
+            name = groupname;
+            groupNum = groupNumber;
             cell = cellSize;
             setScores();
             
+        }
+        private void setGraph(List<Sitio> sitios)
+        {
+            visGraph = new Graph();
+            int pcount = 0;
+            foreach(Sitio s in sitios)
+            {
+                foreach(int[] p in s.gridPoints)
+                {
+                    Node n = new Node();
+                    n.id = pcount;
+                    n.name = s.name;
+                    n.demIndices = new int[2] {p[0],p[1] };
+                    visGraph.nodes.Add(n);
+                    pcount++;
+                }
+            }
+        }
+        private void setObsPoints(List<List<int[]>> pts)
+        {
+            //first set all false
+            observationPts = new List<List<bool>>();
+            for (int i = 0; i < hts.Count; i++)
+            {
+                List<bool> row = new List<bool>();
+                for (int j = 0; j < hts[i].Count; j++)
+                {
+
+                    row.Add(false);
+                }
+                observationPts.Add(row);
+            }
+            //set true only those in pts
+            //set wanted to match input list
+            foreach (List<int[]> sitiopts in pts)
+            {
+                foreach (int[] pt in sitiopts)
+                {
+                    observationPts[pt[0]][pt[1]] = true;
+                }
+            }
+        }
+        private void setAllWanted()
+        {
+            
+            wanted = new List<List<bool>>();
+            for (int i = 0; i < hts.Count; i++)
+            {
+                List<bool> row = new List<bool>();
+                for (int j = 0; j < hts[i].Count; j++)
+                {
+                   
+                    row.Add(true);
+                }
+                wanted.Add(row);
+            }
+        }
+        private void unSetWanted()
+        {
+            for (int i = 0; i < wanted.Count; i++)
+            {
+                
+                for (int j = 0; j < wanted[i].Count; j++)
+                {
+                    wanted[i][j] = false;
+                }
+                
+            }
         }
         private void makeMesh()
         {
             var points = new List<Vertex>();
             var voronoiMesh = VoronoiMesh.Create<Vertex, Cell>(points);
-            var vi = new Vertex()
+            var vi = new Vertex();
             foreach (var cell in voronoiMesh.Vertices)
             {
                 for (int v = 0; v < 3; v++)
@@ -36,14 +113,15 @@ namespace LostCity
         }
         private void setAux()
         {
-            //resets the auxilalry grid based on a cell size in m
+            //resets the auxilalry grid 
             auxHts = new List<List<Point3d>>();
             for (int i = 0; i < hts.Count; i++)
             {
                 List<Point3d> row = new List<Point3d>();
                 for (int j = 0; j < hts[i].Count; j++)
                 {
-                    Point3d p = new Point3d(i * cell, j * -cell, hts[i][j]);
+                    //Point3d p = new Point3d(i * cell, j * -cell, hts[i][j]);
+                    Point3d p = new Point3d(dem.ptsLonLat[i][j][1], dem.ptsLonLat[i][j][0], hts[i][j]);
                     row.Add(p);
                 }
                 auxHts.Add(row);
@@ -122,6 +200,7 @@ namespace LostCity
             Vector3d viewVector = new Vector3d();
             bool visible =true;
             double h = 0;
+            
             while(inside)
             {
                 sample = auxHts[i][j];
@@ -149,7 +228,14 @@ namespace LostCity
                     
                 }
                 prevsample = auxHts[i][j];
-                if (visible) visScore[i][j]++;
+                bool pWanted = wanted[i][j];
+                //only add the score if the point should be analysed and is visible
+                if (visible && pWanted)
+                {
+                    //visGraph.addEdgeByIndices(new int[2] { vprow, vpcol }, new int[2] { i, j });
+                    //previous score increment on pt i j
+                    visScore[vprow][vpcol]++;
+                }
                 
                 i += rowInc;
                 j += colInc;
@@ -197,13 +283,26 @@ namespace LostCity
         }
         public void writeVis(string filename)
         {
-            StreamWriter sw = new StreamWriter(filename + ".csv");
+            StreamWriter sw = new StreamWriter(@"C: \Users\Admin\Documents\projects\LostCity\results\" + filename + ".csv");
             for (int i = 0; i < visScore.Count; i++)
             {
                 for (int j = 0; j < visScore[i].Count; j++)
                 {
                     if (j < visScore[i].Count - 1) sw.Write(visScore[i][j] + ",");
                     else sw.WriteLine(visScore[i][j]);
+                }
+            }
+            sw.Close();
+        }
+        private void printwanted()
+        {
+            StreamWriter sw = new StreamWriter("wanted.csv");
+            for (int i = 0; i < wanted.Count; i++)
+            {
+                for (int j = 0; j < wanted[i].Count; j++)
+                {
+                    if (j < wanted[i].Count - 1) sw.Write(wanted[i][j] + ",");
+                    else sw.WriteLine(wanted[i][j]);
                 }
             }
             sw.Close();
@@ -339,7 +438,14 @@ namespace LostCity
                     else
                     {
                         //sightline
-                        visScore[ind[0]][ind[1]]++;
+                        //check if we need it
+                        bool pWanted = wanted[ind[0]][ind[1]];
+                        if (pWanted)
+                        {
+                            //visScore[ind[0]][ind[1]]++;
+                            //visGraph.addEdgeByIndices(new int[2] { vprow,vpcol},new int[2] { ind[0], ind[1] });
+                            visScore[vprow][vpcol]++;
+                        }
                         //set aux z = to sample z
                         auxHts[ind[0]][ind[1]] = sample;
                     }
@@ -546,11 +652,59 @@ namespace LostCity
 
             }
         }
-        public void pointList(List<int[]> pts)
+        public void terrainVisibility(List<List<int[]>> pts)
         {
-            foreach(int[] pt in pts)
+            setObsPoints(pts);
+            foreach (List<int[]> sitiopts in pts)
             {
-                singlePoint(pt[0], pt[1]);
+                //set everything but the current site for analysis
+                inversesetSubsetToAnalyse(sitiopts);
+                //printwanted();
+                foreach (int[] pt  in sitiopts)
+                {
+                    singlePoint(pt[0], pt[1]);
+                }
+                
+            }
+        }
+        public void interVisibility(List<Sitio> sitios)
+        {
+            //setGraph(sitios);
+            for (int i = 0; i < sitios.Count; i++)
+            {
+                setSubsetToAnalyse(sitios,i);
+                for (int j = 0; j < sitios[i].gridPoints.Count; j++)
+                {
+                    singlePoint(sitios[i].gridPoints[j][0], sitios[i].gridPoints[j][1]);
+                }
+            }
+            //visGraph.bundleSitio();
+            //visGraph.bundlePoint();
+            //visGraph.reduceGraph();
+        }
+        private void inversesetSubsetToAnalyse(List<int[]> pts)
+        {
+            //set all true
+            setAllWanted();
+            foreach (int[] pt in pts)
+            {
+                wanted[pt[0]][pt[1]] = false;
+            }
+        }
+        private void setSubsetToAnalyse(List<Sitio> sitios,int exclude)
+        {
+            //set all true
+            setAllWanted();
+            //set all false 
+            unSetWanted();
+            //set wanted to match input list
+            for(int i =0;i< sitios.Count;i++)
+            {
+                if (i == exclude) continue;
+                for(int j=0;j< sitios[i].gridPoints.Count;j++)
+                {
+                    wanted[sitios[i].gridPoints[j][0]][sitios[i].gridPoints[j][1]] = true;
+                }
             }
         }
         public void traverse()

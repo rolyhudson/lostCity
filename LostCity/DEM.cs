@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Rhino.Geometry;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -18,12 +19,16 @@ namespace LostCity
         double east;
         public List<List<double>> hts = new List<List<double>>();
         public List<List<double[]>> ptsLonLat = new List<List<double[]>>();
+        public List<List<Point3d>> demPts = new List<List<Point3d>>();
+        public List<List<double>> slope = new List<List<double>>();
         int[] threeSecs = { 0, 0, 3 };
         public double threedec = 0;
         double startW=0;
         double startN=0;
+        StreamWriter sw;
         public DEM(string ifolder, double n, double s, double w, double e)
         {
+            sw = new StreamWriter("hgtfiles.csv");
             folder = ifolder;
             north = n;
             south = s;
@@ -48,7 +53,7 @@ namespace LostCity
             double cellW = 0;
             int secondsN = 0;
             int secondsW = 0;
-            
+
             
             for (int i = 0; i < rows; i++)
             {
@@ -68,6 +73,7 @@ namespace LostCity
                     {
                         cellW = Math.Round(cellW);
                     }
+                    
                     openFile(cellN, cellW);
                     secondsN = truncateInSeconds(cellN);
                     secondsW = truncateInSeconds(cellW);
@@ -77,9 +83,12 @@ namespace LostCity
                 ptsLonLat.Add(columnLonLat);
                 hts.Add(column);
             }
+            sw.Close();
             b.Close();
             writeDEM("dem.csv");
             writeDEM2("demheader.csv", startN, startW, threedec);
+            writeDEM3("dempoints.csv");
+            defineSlope();
         }
         private int getSample(double ns, double ew)
         {
@@ -111,6 +120,73 @@ namespace LostCity
             }
             sw.Close();
         }
+        private double slope2FD(int[] p)
+        {
+            //https://www.witpress.com/Secure/elibrary/papers/RM11/RM11013FU1.pdf
+            //Second-order finite difference 2FD 
+            int i = p[0];
+            int j = p[1];
+            if (i == 0 || i == this.demPts.Count - 1) return -1;
+            if (j == 0 || j == this.demPts[0].Count - 1) return -1;
+            double z0 = this.demPts[i][j].Z;
+            double z1 = this.demPts[i - 1][j + 1].Z;
+            double z2 = this.demPts[i][j + 1].Z;
+            double z3 = this.demPts[i + 1][j + 1].Z;
+            double z4 = this.demPts[i + 1][j].Z;
+            double z5 = this.demPts[i + 1][j - 1].Z;
+            double z6 = this.demPts[i][j - 1].Z;
+            double z7 = this.demPts[i - 1][j - 1].Z;
+            double z8 = this.demPts[i - 1][j].Z;
+
+            double fx = (z6-z2) / (2 * 90);
+            double fy = (z8-z4) / (2 * 90);
+            double s = Math.Atan(Math.Sqrt(fx * fx + fy * fy)) * 57.2958;
+            return s;
+        }
+        private double slopeHorn(int[] p)
+        {
+            //using Horn's (1981) 3rd-order finite difference
+            //https://jblindsay.github.io/wbt_book/available_tools/geomorphometric_analysis.html?highlight=slope#slope
+            //grid:
+            //| 7 | 8 | 1 |
+            //| 6 | 9 | 2 |
+            //| 5 | 4 | 3 |
+            //i is the row 
+            //j is the column
+            //starting in nw corner
+            int i = p[0];
+            int j = p[1];
+            if (i == 0 || i == this.demPts.Count-1) return -1;
+            if (j == 0 || j == this.demPts[0].Count - 1) return -1;
+
+            double z1 = this.demPts[i - 1][j + 1].Z;
+            double z2 = this.demPts[i][j + 1].Z;
+            double z3 = this.demPts[i + 1][j + 1].Z;
+            double z4 = this.demPts[i + 1][j].Z;
+            double z5 = this.demPts[i + 1][j - 1].Z;
+            double z6 = this.demPts[i][j - 1].Z;
+            double z7 = this.demPts[i - 1][j - 1].Z;
+            double z8 = this.demPts[i - 1][j].Z;
+            //90 is the cell size
+            double fx = (z3 - z5 + 2 * (z2 - z6) + z1 - z7) / (8 * 90);
+            double fy = (z7 - z5 + 2 * (z8 - z4) + z1 - z3) / (8 * 90);
+            double s = Math.Atan(Math.Sqrt(fx * fx + fy * fy)) * 57.2958;
+
+            return s;
+        }
+        private void defineSlope()
+        {
+            for (int i = 0; i < hts.Count; i++)
+            {
+                List<double> s = new List<double>();
+                for (int j = 0; j < hts[i].Count; j++)
+                {
+                    int[] p = new int[] { i, j };
+                    s.Add(slopeHorn(p));
+                }
+                this.slope.Add(s);
+            }
+        }
         private void writeDEM2(string filepath, double startN, double startW, double cellSize)
         {
             StreamWriter sw = new StreamWriter(filepath);
@@ -126,11 +202,28 @@ namespace LostCity
             }
             sw.Close();
         }
+        private void writeDEM3(string filepath)
+        {
+            //dumping as x,y,z per line
+            StreamWriter sw = new StreamWriter(filepath);
+             for (int i = 0; i < hts.Count; i++)
+            {
+                List<Point3d> ptRow = new List<Point3d>();
+                for (int j = 0; j < hts[i].Count; j++)
+                {
+                    sw.WriteLine(ptsLonLat[i][j][1]+","+ ptsLonLat[i][j][0] + "," + hts[i][j]/100);
+                    ptRow.Add(new Point3d(ptsLonLat[i][j][1], ptsLonLat[i][j][0], hts[i][j]));
+                }
+                demPts.Add(ptRow);
+            }
+            sw.Close();
+        }
         private void openFile(double n, double w)
         {
             string file = getFileFromCoord(n, w);
             if (currentHGT != file)
             {
+                sw.WriteLine(currentHGT);
                 if (b != null) b.Close();
                 b = new BinaryReader(new FileStream(folder + file, FileMode.Open, FileAccess.Read), new ASCIIEncoding());
                 currentHGT = file;
